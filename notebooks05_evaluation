@@ -1,0 +1,66 @@
+# notebooks05_case_accuracy_fixed.py
+
+import os
+import json
+import pandas as pd
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+
+# 1) Load predictions
+pred_df = pd.read_csv("data/results/predictions.csv")
+
+# 2) Load auto‐augmented queries dengan true_case
+with open("data/eval/queries_with_true_case_auto.json", "r", encoding="utf-8") as f:
+    queries = json.load(f)
+qry_df = pd.DataFrame(queries)
+
+# 3) Pastikan hanya satu kolom query_id di JSON:
+#    - Jika ada kolom 'query_id', buang dulu
+if "query_id" in qry_df.columns:
+    qry_df = qry_df.drop(columns=["query_id"])
+#    - Ganti kolom 'id' menjadi 'query_id'
+qry_df = qry_df.rename(columns={"id":"query_id"})
+
+# 4) Merge on query_id
+merged = pred_df.merge(
+    qry_df[["query_id","true_case"]],
+    on="query_id",
+    how="left"
+)
+
+# 5) Isi NaN dengan string kosong
+merged["true_case"]      = merged["true_case"].fillna("")
+merged["retrieved_case"] = merged["retrieved_case"].fillna("")
+
+# 6) Hitung metrik case‐ID retrieval
+y_true = merged["true_case"]
+y_pred = merged["retrieved_case"]
+
+acc  = accuracy_score(y_true, y_pred)
+prec, rec, f1, _ = precision_recall_fscore_support(
+    y_true, y_pred, average="macro", zero_division=0
+)
+
+# 7) Cetak hasil
+print("=== Case‐ID Retrieval Evaluation ===")
+print(f"Accuracy : {acc:.2%}")
+print(f"Precision: {prec:.2%}")
+print(f"Recall   : {rec:.2%}")
+print(f"F1-score : {f1:.2%}")
+
+# 8) Lihat beberapa mismatch
+mismatch = merged[merged["true_case"] != merged["retrieved_case"]]
+if not mismatch.empty:
+    print("\nContoh mismatch:")
+    print(mismatch[["query_id","true_case","retrieved_case"]].head())
+
+# 9) Simpan metrik
+os.makedirs("data/results", exist_ok=True)
+pd.DataFrame([{
+    "method":    "case_id_retrieval",
+    "accuracy":  acc,
+    "precision": prec,
+    "recall":    rec,
+    "f1_score":  f1
+}]).to_csv("data/results/case_accuracy_metrics.csv", index=False, encoding="utf-8-sig")
+
+print("\n[Metrik tersimpan di data/results/case_accuracy_metrics.csv]")
