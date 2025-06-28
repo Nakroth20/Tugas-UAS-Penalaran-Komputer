@@ -1,0 +1,1 @@
+# Tugas-UAS-Penalaran-Komputer
